@@ -8,30 +8,33 @@
 
 1. master 的高可用，需要一个前置的 vip，理想情况是用 F5 硬件，如不能提供，需要分配一个**空的 ip，两台 4c8g 小型机器**，使用 keepalived + haproxy 实现，则架构图中的 **load balancer** 部分如下图。
 
-   ![image-20220208213520849](/home/jing2uo/kube-init/assets/image-20220208213520849.png)
+   ![image-20220208213520849](./assets/image-20220208213520849.png)
 
    
 
 ## **软件版本**
 
-| 组件       | 版本       | 备注               |
-| ---------- | ---------- | ------------------ |
-| os         | centos 7.8 | 部署时分区使用 lvm |
-| kubernetes | v1.21.4    |                    |
-| docker     | 20.10.7    |                    |
+| 组件       | 版本                        | 备注               |
+| ---------- | --------------------------- | ------------------ |
+| os         | 支持 centos 7.8，centos 7.9 | 部署时分区使用 lvm |
+| kubernetes | 支持 kubeadm 支持的版本     |                    |
+| docker     | docker ce 最新版本          |                    |
 
 ## **部署过程**
 
 ```shell
-kube-init/workflow          #  repo 中 workflow 文件夹中包含以下脚本      
-├── 1-prepare.sh            #  基础配置，所有节点都执行      
-├── 2-registry.sh           #  部署私有镜像仓库，kubernetes master 任一节点执行 
-├── 3-vip.sh                #  部署 keepalived 和 haproxy， vip 两个节点上执行  
-├── 4-yum.sh                #  添加 yum 源并安装 docker kube* 包，kubernetes 所有节点执行    
-├── 5-kubeadm-init.sh       #  使用 kubeadm 创建高可用集群，kubernetes master 任一节点执行
-├── 6-kubeadm-join.sh       #  上一步选择的节点执行，然后复制输出的命令，到其他 master 节点和 node 节点执行 
-├── 7-flannel.sh            #  部署 flannel，任一 master 节点执行
-└── 8-gpu.sh                #  TODO
+/workflow          #  repo 中 workflow 文件夹中包含以下脚本  
+    ├── 0-env.sh
+    ├── 1-function.sh    # 定义了大部分通用函数
+    ├── 2-registry.sh    # 部署 registry 
+    ├── 3-vip.sh         # 部署 haproxy + keepalived
+    ├── 4-gpu.sh         # 腾讯开源 gpu 方案
+    ├── cleanup.sh       # 清理节点
+    └── origin                # 备份文件夹，执行 prepare.sh 会替换 ENDPOINT 为当前节点 ip
+        ├── index.html        # 浏览器打开 localhost:8989 可以看到简单的帮助信息
+        ├── join.sh           # 添加节点
+        └── onenode.sh        # 单点部署
+
 ```
 
 **操作时需要修改的部分**：
@@ -75,6 +78,3 @@ kube-init/workflow/3-vip.sh                  #  3-vip.sh 需要修改
 3. 新建环境时在集群中创建高可用 registry，依赖的镜像同步到此仓库集中管理
 4. prometheus 集成
 5. dashboard 部署
-6. 可以考虑增加 shell 脚本或者 ansible playbook 整合以上内容（可选，用 python 实现可以做更多工作）
-7. 使用 python 把所有过程整合起来，增加执行前的检查和异常捕获，提供页面收集必须的信息后运行
-

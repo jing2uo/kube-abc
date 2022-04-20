@@ -1,6 +1,8 @@
-mkdir -p /data/registry
+export REGISTRY_DATA='/data/registry'
 
-cat <<EOF >>/data/registry/config.yaml
+install_registry() {
+  mkdir -p ${REGISTRY_DATA}
+  cat <<EOF >> ${REGISTRY_DATA}/config.yaml
 version: 0.1
 log:
   level: info
@@ -30,11 +32,11 @@ health:
   storagedriver:
     enabled: false
 EOF
-
 docker run -d \
     --name registry \
     --network host \
     --restart always \
-    -v /data/registry/registry/:/var/lib/registry/ \
-    -v /data/registry/config.yaml:/etc/docker/registry/config.yml \
+    -v ${REGISTRY_DATA}/data/:/var/lib/registry/ \
+    -v ${REGISTRY_DATA}/config.yaml:/etc/docker/registry/config.yml \
     registry:v2.7.1
+}

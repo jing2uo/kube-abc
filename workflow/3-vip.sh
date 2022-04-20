@@ -15,9 +15,10 @@ elif [[ ${OWNIP} == ${VIP2} ]]; then
     export PARTNERIP=${VIP1}
 fi
 
-yum install keepalived haproxy psmisc -y
-
-cat <<EOF >/etc/haproxy/haproxy.cfg
+install_haproxy() {
+  yum install haproxy -y -q
+  mkdir -p /etc/haproxy/
+  cat <<EOF >/etc/haproxy/haproxy.cfg
 global
     log     127.0.0.1 local0
     nbproc 1           # 1 is recommended
@@ -47,51 +48,32 @@ listen stats
         stats hide-version
         stats uri  /admin
         stats realm LB2\ Statistics
-        stats auth mathilde:Mathilde1861
+        stats auth admin:admin@123
 
 listen web-service
     bind 127.0.0.1:9
 
-frontend cpaas_frontend_80
+frontend frontend_80
   bind *:80
   mode http
-  default_backend cpaas_80
+  default_backend backend_80
 
-frontend cpaas_frontend_443
+frontend frontend_443
   bind *:443
   mode tcp
-  default_backend cpaas_443
+  default_backend backend_443
 
-frontend cpaas_frontend_6443
+frontend frontend_6443
   bind *:6443
   mode tcp
-  default_backend cpaas_6443
+  default_backend backend_6443
 
-frontend cpaas_frontend_60080
-  bind *:60080
-  mode tcp
-  default_backend cpaas_60080
-
-frontend cpaas_frontend_2379
+frontend frontend_2379
   bind *:2379
   mode tcp
-  default_backend cpaas_2379
+  default_backend backend_2379
 
-frontend cpaas_frontend_11780
-  bind *:11780
-  mode tcp
-  default_backend cpaas_11780
-
-backend cpaas_11780
-  mode tcp
-  balance roundrobin
-  default-server on-marked-down shutdown-sessions
-server s0 ${MASTER1}:11780 check port 11780 inter 1000 maxconn 51200
-server s1 ${MASTER2}:11780 check port 11780 inter 1000 maxconn 51200
-server s2 ${MASTER3}:11780 check port 11780 inter 1000 maxconn 51200
-
-
-backend cpaas_2379
+backend backend_2379
   mode tcp
   balance roundrobin
   default-server on-marked-down shutdown-sessions
@@ -99,7 +81,7 @@ server s0 ${MASTER1}:2379 check port 2379 inter 1000 maxconn 51200
 server s1 ${MASTER2}:2379 check port 2379 inter 1000 maxconn 51200
 server s2 ${MASTER3}:2379 check port 2379 inter 1000 maxconn 51200
 
-backend cpaas_60080
+backend backend_60080
   mode tcp
   balance roundrobin
   default-server on-marked-down shutdown-sessions
@@ -107,7 +89,7 @@ server s0 ${MASTER1}:60080 check port 60080 inter 1000 maxconn 51200
 server s1 ${MASTER2}:60080 check port 60080 inter 1000 maxconn 51200
 server s2 ${MASTER3}:60080 check port 60080 inter 1000 maxconn 51200
 
-backend cpaas_80
+backend backend_80
   mode http
   balance roundrobin
   default-server on-marked-down shutdown-sessions
@@ -115,8 +97,7 @@ server s0 ${MASTER1}:80 check port 80 inter 1000 maxconn 51200
 server s1 ${MASTER2}:80 check port 80 inter 1000 maxconn 51200
 server s2 ${MASTER3}:80 check port 80 inter 1000 maxconn 51200
 
-
-backend cpaas_443
+backend backend_443
   mode tcp
   balance roundrobin
   default-server on-marked-down shutdown-sessions
@@ -124,8 +105,7 @@ server s0 ${MASTER1}:443 check port 443 inter 1000 maxconn 51200
 server s1 ${MASTER2}:443 check port 443 inter 1000 maxconn 51200
 server s2 ${MASTER3}:443 check port 443 inter 1000 maxconn 51200
 
-
-backend cpaas_6443
+backend backend_6443
   mode tcp
   balance roundrobin
   default-server on-marked-down shutdown-sessions
@@ -133,10 +113,13 @@ server s0 ${MASTER1}:6443 check port 6443 inter 1000 maxconn 51200
 server s1 ${MASTER2}:6443 check port 6443 inter 1000 maxconn 51200
 server s2 ${MASTER3}:6443 check port 6443 inter 1000 maxconn 51200
 EOF
+  systemctl enable haproxy && systemctl restart haproxy
+}
 
-systemctl enable haproxy && systemctl restart haproxy
-
-cat <<EOF >/etc/keepalived/keepalived.conf
+install_keepalived() {
+  yum install keepalived -y -q
+  mkdir -p /etc/keepalived/
+  cat <<EOF >/etc/keepalived/keepalived.conf
 global_defs {
     notification_email {
     }
@@ -176,5 +159,5 @@ vrrp_instance haproxy-vip {
     }
 }
 EOF
-
 systemctl enable keepalived && systemctl restart keepalived
+}
