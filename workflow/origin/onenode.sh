@@ -10,6 +10,8 @@ else
     get_kube_version $1
 fi
 
+rm -rf /tmp/kubeadc.log
+
 common_prepare
 echo "### 安装 kubeadm kubelet kubectl"
 install_kube &>>/tmp/kubeabc.log
@@ -22,7 +24,7 @@ echo ""
 echo "### 如需添加 node 节点，请到目标机器执行以下命令"
 echo ""
 echo "curl -s http://${ENDPOINT}/join.sh | bash -s -- ${KUBE_VERSION}"
-grep "kubeadm join" -A1 /tmp/kubeabc.log
+grep "kubeadm join" -A1 /tmp/kubeabc.log | sed 's/\\//g' | sed ":a;N;s/\n//g;ta" | sed "s|--token|  --node-name \$(cat /tmp/ownip)  --token |g"
 echo ""
 echo "### 如遇到问题需要清理节点，请执行以下命令"
 echo "curl -s http://${ENDPOINT}/cleanup.sh | bash -s"

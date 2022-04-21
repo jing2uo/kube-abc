@@ -1,0 +1,8 @@
+最新版 kubernetes 单点部署
+curl -s http://CHANGEME/onenode.sh | bash -s
+
+指定版本 kubernetes 单点部署
+curl -s http://CHANGEME/onenode.sh | bash -s -- 1.22.3
+
+清理节点
+curl -s http://CHANGEME/cleanup.sh | bash -s

@@ -3,8 +3,7 @@
 version="v1.1"
 para="$1"
 
-if [ "$para" == "-h" ] || [ "$para" == "--help" ]
-then
+if [ "$para" == "-h" ] || [ "$para" == "--help" ]; then
   echo "Clean up the node"
   echo "Usage: cleanup.sh [options] "
   echo ""
@@ -14,14 +13,13 @@ then
   exit 0
 fi
 
-if [ "$para" == "--version" ] || [ "$para" == "-v" ]
-then
+if [ "$para" == "--version" ] || [ "$para" == "-v" ]; then
   echo $version
   exit 0
 fi
 echo "Version: $version"
-systemctl  stop kubelet
-docker rm -f `docker ps -aq`
+systemctl stop kubelet
+docker rm -f $(docker ps -aq)
 systemctl restart docker
 /usr/local/bin/kubeadm reset -f
 /usr/local/bin/kubeadm reset -f
@@ -34,29 +32,27 @@ systemctl daemon-reload
 systemctl stop kubelet
 systemctl stop check-kubelet
 
-docker ps -qa|xargs docker rm -f
+docker ps -qa | xargs docker rm -f
 
 systemctl disable containerd
 systemctl daemon-reload
 systemctl stop containerd
 rm -rf /etc/systemd/system/docker.service*
-ps -ef | awk '$8=="containerd" {print $2}'| xargs kill
+ps -ef | awk '$8=="containerd" {print $2}' | xargs kill
 
 rpm -qa | grep kube | xargs rpm -e
 rpm -qa | grep docker | xargs rpm -e
 rpm -qa | grep containe | xargs rpm -e
 
-for j in {1..5}
-do
-    for i in kubelet kubeadm kubectl kubectl-captain helm dockerd docker containerd
-    do
-        rm -rf $(which $i 2>/dev/null)
-    done
+for j in {1..5}; do
+  for i in kubelet kubeadm kubectl kubectl-captain helm dockerd docker containerd; do
+    rm -rf $(which $i 2>/dev/null)
+  done
 done
 
 rm -rf ~/.docker/config.json
 rm -rf /etc/containerd/config.toml
-rm -rf /var/lib/docker/*
+rm -rf /var/lib/docker*
 rm -rf /var/lib/containerd/*
 
 ip link set dummy0 down
@@ -70,7 +66,6 @@ ip link set cni0 down
 ip link delete flannel.1
 ip link delete cni0
 ip link del keepalived
-
 
 rm -rf /etc/kube*
 rm -rf /var/lib/kubelet
@@ -90,15 +85,12 @@ rm -rf /etc/systemd/system/kubelet.service*
 rm -rf /usr/lib/systemd/system/kubelet.service*
 rm -rf /usr/lib/systemd/system/docker.service*
 
-
 rm -rf $HOME/.kube
 rm -rf $HOME/.helm
 rm -rf $HOME/.ansible/
 rm -rf /root/.helm
 rm -rf /root/.kube
 rm -rf /root/.ansible/
-
-rm -rf /cpaas/*
 
 rm -rf /var/run/openvswitch
 rm -rf /var/run/ovn
@@ -116,7 +108,7 @@ df -l --output=target | grep ^/var/lib/kubelet | xargs -r umount
 ip link del ipvlan0
 ip link del macvlan0
 ip link del tunl0
-for i in $(arp -an | grep 'PERM on macvlan0' | awk '{print $2}' | sed -e 's/(//g' -e 's/)//g') ; do arp -i macvlan0 -d $i; done;
+for i in $(arp -an | grep 'PERM on macvlan0' | awk '{print $2}' | sed -e 's/(//g' -e 's/)//g'); do arp -i macvlan0 -d $i; done
 
 iptables -P INPUT ACCEPT
 iptables -P FORWARD ACCEPT
@@ -129,4 +121,3 @@ update-alternatives --set iptables /usr/sbin/iptables-legacy
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 ipvsadm -C
-
