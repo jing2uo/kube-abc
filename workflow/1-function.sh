@@ -105,6 +105,163 @@ EOF
   systemctl stop docker && rm -rf /var/lib/docker && systemctl start docker && systemctl enable docker
 }
 
+install_haproxy() {
+  if [[ $1 == "" || $2 == "" || $3 == "" ]]; then
+    echo "Input master1 master2 master3 IPs, like install_haproxy 1.1.1.1 2.2.2.2 3.3.3.3"
+    exit 1
+  fi
+
+  yum install haproxy -y -q
+  mkdir -p /etc/haproxy/
+  cat <<EOF >/etc/haproxy/haproxy.cfg
+global
+    log     127.0.0.1 local0
+    nbproc 1           # 1 is recommended
+    maxconn  51200     # maximum per-process number of concurrent connections
+    pidfile /etc/haproxy/haproxy.pid
+    tune.ssl.default-dh-param 2048
+
+defaults
+        mode http      # { tcp|http|health }
+        #retries 2
+        #option httplog
+        #option tcplog
+        maxconn  51200
+        option redispatch
+        option abortonclose
+        timeout connect 5000ms
+        timeout client 2m
+        timeout server 2m
+        log global
+        balance roundrobin
+
+listen stats
+        bind 0.0.0.0:2936
+        mode http
+        stats enable
+        stats refresh 10s
+        stats hide-version
+        stats uri  /admin
+        stats realm LB2\ Statistics
+        stats auth admin:admin@123
+
+listen web-service
+    bind 127.0.0.1:9
+
+frontend frontend_80
+  bind *:80
+  mode http
+  default_backend backend_80
+
+frontend frontend_443
+  bind *:443
+  mode tcp
+  default_backend backend_443
+
+frontend frontend_6443
+  bind *:6443
+  mode tcp
+  default_backend backend_6443
+
+frontend frontend_2379
+  bind *:2379
+  mode tcp
+  default_backend backend_2379
+
+backend backend_2379
+  mode tcp
+  balance roundrobin
+  default-server on-marked-down shutdown-sessions
+server s0 $1:2379 check port 2379 inter 1000 maxconn 51200
+server s1 $2:2379 check port 2379 inter 1000 maxconn 51200
+server s2 $3:2379 check port 2379 inter 1000 maxconn 51200
+
+backend backend_60080
+  mode tcp
+  balance roundrobin
+  default-server on-marked-down shutdown-sessions
+server s0 $1:60080 check port 60080 inter 1000 maxconn 51200
+server s1 $2:60080 check port 60080 inter 1000 maxconn 51200
+server s2 $3:60080 check port 60080 inter 1000 maxconn 51200
+
+backend backend_80
+  mode http
+  balance roundrobin
+  default-server on-marked-down shutdown-sessions
+server s0 $1:80 check port 80 inter 1000 maxconn 51200
+server s1 $2:80 check port 80 inter 1000 maxconn 51200
+server s2 $3:80 check port 80 inter 1000 maxconn 51200
+
+backend backend_443
+  mode tcp
+  balance roundrobin
+  default-server on-marked-down shutdown-sessions
+server s0 $1:443 check port 443 inter 1000 maxconn 51200
+server s1 $2:443 check port 443 inter 1000 maxconn 51200
+server s2 $3:443 check port 443 inter 1000 maxconn 51200
+
+backend backend_6443
+  mode tcp
+  balance roundrobin
+  default-server on-marked-down shutdown-sessions
+server s0 $1:6443 check port 6443 inter 1000 maxconn 51200
+server s1 $2:6443 check port 6443 inter 1000 maxconn 51200
+server s2 $3:6443 check port 6443 inter 1000 maxconn 51200
+EOF
+  systemctl enable haproxy && systemctl restart haproxy
+}
+
+install_keepalived() {
+  if [[ $1 == "" || $2 == "" ]]; then
+    echo "Input vip and partner_node's ip, like install_keepalived 1.1.1.1 2.2.2.2"
+    exit 1
+  fi
+
+  yum install keepalived -y -q
+  mkdir -p /etc/keepalived/
+  cat <<EOF >/etc/keepalived/keepalived.conf
+global_defs {
+    notification_email {
+    }
+    router_id LVS_DEVEL
+    vrrp_skip_check_adv_addr
+    vrrp_garp_interval 0
+    vrrp_gna_interval 0
+}
+
+vrrp_script chk_haproxy {
+    script "killall -0 haproxy"
+    interval 2
+    weight 2
+}
+
+vrrp_instance haproxy-vip {
+    state BACKUP
+    priority 100
+    interface ${IFACE}
+    virtual_router_id 60
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+    unicast_src_ip ${OWNIP}
+    unicast_peer {
+        $1
+    }
+
+    virtual_ipaddress {
+        $2
+    }
+
+    track_script {
+        chk_haproxy
+    }
+}
+EOF
+  systemctl enable keepalived && systemctl restart keepalived
+}
+
 get_kube_version() {
   curl -s -k https://mirrors.tuna.tsinghua.edu.cn/kubernetes/yum/repos/kubernetes-el7-x86_64/Packages/ -o /tmp/xxx.html && grep kubeadm /tmp/xxx.html | awk -F'-' '{print $3}' | sort -V >/tmp/kube_version && rm /tmp/xxx.html -rf
   if [[ $1 == '' ]]; then
@@ -144,6 +301,11 @@ kube_init_one_node() {
 }
 
 kube_init_ha() {
+  if [[ $1 == "" ]]; then
+    echo "Input vip, like kube_init_ha 1.1.1.1"
+    exit 1
+  fi
+
   cat <<EOF >>kubeadm.yaml
 apiServer:
   timeoutForControlPlane: 4m0s
@@ -158,7 +320,7 @@ etcd:
 imageRepository: registry.aliyuncs.com/google_containers
 kind: ClusterConfiguration
 kubernetesVersion: ${KUBE_VERSION}
-controlPlaneEndpoint: "${VIP}:6443"
+controlPlaneEndpoint: "$1:6443"
 networking:
   podSubnet: ${PODSUBNET}
   dnsDomain: cluster.local
@@ -424,6 +586,40 @@ EOF
 
   kubectl apply -f /tmp/kube-flannel.yaml &>/dev/null
 
+}
+
+create_admin_token() {
+
+  echo "
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: default
+  name: cls-access
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cls-access
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    namespace: default
+    name: cls-access
+" | kubectl apply -f -
+
+}
+
+get_admin_token() {
+  kubectl describe secret -n default $(kubectl describe sa cls-access -n default |
+    grep Tokens: | awk '{print $2}') | grep token: | awk '{print $2}'
+}
+
+get_ca_key() {
+  cat /etc/kubernetes/admin.conf | grep certificate-authority-data | awk '{print $2}' | base64 -d
 }
 
 common_prepare() {

@@ -1,5 +1,4 @@
-
-cat << EOF >> /tmp/gpu.yaml
+cat <<EOF >>/tmp/gpu.yaml
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -16,7 +15,7 @@ rules:
   - '*'
   verbs:
   - '*'
- 
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -30,13 +29,13 @@ subjects:
 - kind: ServiceAccount
   name: tke-admin
   namespace: kube-system
- 
+
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: tke-admin
-  namespace: kube-system  
+  namespace: kube-system
 ---
 apiVersion: v1
 data:
