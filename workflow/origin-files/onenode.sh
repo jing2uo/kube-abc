@@ -4,21 +4,13 @@ export SVCSUBNET="10.96.0.0/12"
 
 source <(curl -s ${ENDPOINT}/1-function.sh)
 
-if [[ $1 == '' ]]; then
-    get_kube_version
-else
-    get_kube_version $1
-fi
-
 rm -rf /tmp/kubeadc.log
 
+get_kube_version $1
+
 common_prepare
-echo "### 安装 kubeadm kubelet kubectl"
-install_kube &>>/tmp/kubeabc.log
-echo "### 初始化 kubernetes ${KUBE_VERSION}"
-kube_init_one_node &>>/tmp/kubeabc.log
-echo "### 安装 flannel"
-install_flannel &>>/tmp/kubeabc.log
+kube_init_one_node $1
+install_flannel
 
 echo ""
 echo "### 如需添加 node 节点，请到目标机器执行以下命令"

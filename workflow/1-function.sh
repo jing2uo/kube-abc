@@ -274,7 +274,12 @@ get_kube_version() {
 }
 
 install_kube() {
-  echo "### 安装 kubeadm kubelet kubectl"
+  if [[ $1 == '' ]]; then
+    get_kube_version
+  else
+    get_kube_version $1
+  fi
+  echo "### 安装 ${KUBE_VERSION} 版 kubeadm kubelet kubectl"
   cat <<EOF >/etc/yum.repos.d/kube.repo
 [kubernetes]
 name=kubernetes
@@ -282,10 +287,11 @@ baseurl=https://opentuna.cn/kubernetes/yum/repos/kubernetes-el7-\$basearch
 enabled=1
 gpgcheck=0
 EOF
-  yum install kubeadm-${KUBE_VERSION} kubelet-${KUBE_VERSION} kubectl-${KUBE_VERSION} -y -q && systemctl enable kubelet
+  yum install kubeadm-${KUBE_VERSION} kubelet-${KUBE_VERSION} kubectl-${KUBE_VERSION} -y -q && systemctl enable kubelet &>/dev/null
 }
 
 kube_init_one_node() {
+  install_kube $1
   echo "### 初始化 kubernetes ${KUBE_VERSION}"
   kubeadm config print init-defaults >/tmp/kubeadm.yaml
   sed -i 's|imageRepository:\ k8s.gcr.io|imageRepository:\ registry.aliyuncs.com/google_containers|g' /tmp/kubeadm.yaml
@@ -293,7 +299,7 @@ kube_init_one_node() {
   sed -i "s|name:.*|name:\ ${OWNIP}|g" /tmp/kubeadm.yaml
   sed -i -e "s|kubernetesVersion:.*|kubernetesVersion:\ ${KUBE_VERSION}|g" /tmp/kubeadm.yaml
   sed -i "/networking/a\  podSubnet: ${PODSUBNET}" /tmp/kubeadm.yaml
-  kubeadm init --upload-certs --config /tmp/kubeadm.yaml
+  kubeadm init --upload-certs --config /tmp/kubeadm.yaml &>/tmp/kubeabc.log
   mkdir -p $HOME/.kube
   cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
   chown $(id -u):$(id -g) $HOME/.kube/config
